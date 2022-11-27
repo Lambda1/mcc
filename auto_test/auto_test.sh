@@ -19,7 +19,6 @@ assert()
 
 }
 
-assert 0 0
-assert 100 100
+assert 255 5+120+130-1-1+2
 
 echo "OK"
