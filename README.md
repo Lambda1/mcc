@@ -1,2 +1,3 @@
 # mcc
-c-compiler
+test  
+
