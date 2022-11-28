@@ -20,5 +20,6 @@ assert()
 }
 
 assert 255 5+120+130-1-1+2
+assert 41 " 12 + 34-5 "
 
 echo "OK"
