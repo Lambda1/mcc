@@ -25,6 +25,24 @@ struct Token
 	const char* str;
 };
 
+// 抽象構文木ノード
+enum NodeKind
+{
+	ND_ADD,
+	ND_SUB,
+	ND_MUL,
+	ND_DIV,
+	ND_NUM,
+};
+
+struct Node
+{
+	enum NodeKind kind;
+	struct Node* pLhs;
+	struct Node* pRhs;
+	int value; // kind == ND_NUM
+};
+
 // -- DEBUG --
 // トークン構造体表示
 void DebugPrintToken(const struct Token* const pToken)
@@ -45,7 +63,6 @@ void DebugPrintTokens(const struct Token* pToken)
 	}
 }
 
-
 // -- FUNCTION --
 // エラーでシバく
 void ErrorAt(const char* const loc, const char* const userInput, char* fmt, ...)
@@ -63,6 +80,7 @@ void ErrorAt(const char* const loc, const char* const userInput, char* fmt, ...)
 	exit(1);
 }
 
+// -- TOKEN --
 // トークンが期待する記号か判定
 bool IsExpectedToken(const char op, const struct Token* const pToken)
 {
@@ -73,7 +91,6 @@ bool IsExpectedToken(const char op, const struct Token* const pToken)
 	}
 	return true;
 }
-
 // トークンが期待する整数か判定
 bool IsExpectedNumber(const struct Token* const pToken)
 {
@@ -84,14 +101,12 @@ bool IsExpectedNumber(const struct Token* const pToken)
 	}
 	return true;
 }
-
 // トークンがEOFか判定
 bool IsEOF(const struct Token* const pToken)
 {
 	assert(pToken != NULL);
 	return (pToken->kind == TK_EOF);
 }
-
 // トークンを作成
 struct Token* CreateNewToken(const enum TokenKind kind, const char* const str)
 {
@@ -103,7 +118,6 @@ struct Token* CreateNewToken(const enum TokenKind kind, const char* const str)
 	pNewToken->str = str;
 	return pNewToken;
 }
-
 // 入力文字列をトークナイズ(トークンに分解)
 struct Token* Tokenize(char* pStr)
 {
@@ -148,7 +162,6 @@ struct Token* Tokenize(char* pStr)
 	pCurrent->next = pTail;
 	return head.next;
 }
-
 void ReleaseTokenMemory(struct Token* pToken)
 {
 	struct Token* pDummy = pToken;
@@ -158,6 +171,90 @@ void ReleaseTokenMemory(struct Token* pToken)
 		free(pToken);
 		pToken = pDummy;
 	}
+}
+
+// -- NODE --
+struct Node* Expr(struct Token* pToken, const char* const pSrc);
+struct Node* Mul(struct Token* pToken, const char* const pSrc);
+struct Node* Primary(struct Token* pToken, const char* const pSrc);
+
+struct Node* CreateNewNode(void)
+{
+	struct Node* const pNode = (struct Node*)malloc(1 * sizeof(struct Node));
+	assert(pNode != NULL);
+	pNode->pLhs = NULL;
+	pNode->pRhs = NULL;
+	return pNode;
+}
+void SetNode(struct Node* const pNode, const enum NodeKind kind, struct Node* const pLhs, struct Node* const pRhs)
+{
+	assert(pNode != NULL);
+	pNode->kind = kind;
+	pNode->pLhs = pLhs;
+	pNode->pRhs = pRhs;
+}
+// expr = mul ( "+" mul | "-" mul) *
+struct Node* Expr(struct Token* pToken, const char* const pSrc)
+{
+	struct Node* pNode = Mul(pToken, pSrc);
+	if (IsExpectedToken('+', pToken))
+	{
+		pToken = pToken->next;
+
+		struct Node* const pTmp = CreateNewNode();
+		SetNode(pTmp, ND_ADD, pNode, Mul(pToken, pSrc));
+		pNode = pTmp;
+	}
+	else if (IsExpectedToken('-', pToken))
+	{
+		pToken = pToken->next;
+
+		struct Node* const pTmp = CreateNewNode();
+		SetNode(pTmp, ND_SUB, pNode, Mul(pToken, pSrc));
+		pNode = pTmp;
+	}
+	return pNode;
+}
+// mul = primary ( "*" primary | "/" primary ) *
+struct Node* Mul(struct Token* pToken, const char* const pSrc)
+{
+	struct Node* pNode = Primary(pToken, pSrc);
+	if (IsExpectedToken('*', pToken))
+	{
+		pToken = pToken->next;
+
+		struct Node* const pTmp = CreateNewNode();
+		SetNode(pTmp, ND_MUL, pNode, Primary(pToken, pSrc));
+		pNode = pTmp;
+	}
+	else if (IsExpectedToken('/', pToken))
+	{
+		pToken = pToken->next;
+
+		struct Node* const pTmp = CreateNewNode();
+		SetNode(pTmp, ND_DIV, pNode, Primary(pToken, pSrc));
+		pNode = pTmp;
+	}
+	return pNode;
+}
+// primary = num | "(" expr ")"
+struct Node* Primary(struct Token* pToken, const char* const pSrc)
+{
+	if (IsExpectedToken('(', pToken))
+	{
+		pToken = pToken->next;
+
+		struct Node* const pNode = Expr(pToken, pSrc);
+		if (IsExpectedToken(')', pToken)) { ErrorAt(pToken->str, pSrc, "need token ')'."); }
+		pToken = pToken->next;
+		return pNode;
+	}
+
+	if (!IsExpectedNumber(pToken)) { ErrorAt(pToken->str, pSrc, "need token num"); }
+	struct Node* const pNode = CreateNewNode();
+	pNode->value = pToken->value;
+	pToken = pToken->next;
+	return pNode;
 }
 
 int main(int argc, char *argv[])
