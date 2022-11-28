@@ -62,6 +62,15 @@ void DebugPrintTokens(const struct Token* pToken)
 		pToken = pToken->next;
 	}
 }
+// ノード構造体表示
+void DebugPrintNode(const struct Node* const pNode)
+{
+	printf("Node Info: %p\n", pNode);
+	printf("kind : %d\n", pNode->kind);
+	printf("pLhs : %p\n", pNode->pLhs);
+	printf("pRhs : %p\n", pNode->pRhs);
+	printf("value: %d\n", pNode->value);
+}
 
 // -- FUNCTION --
 // エラーでシバく
@@ -137,7 +146,7 @@ struct Token* Tokenize(char* pStr)
 		}
 
 		const char ch = pStr[0];
-		if (ch == '+' || ch == '-')
+		if (ch == '+' || ch == '-' || ch == '*' || ch == '/' || ch == '(' || ch == ')')
 		{
 			struct Token* const pTmp = CreateNewToken(TK_RESERVED, pStr);
 			pCurrent->next = pTmp;
@@ -189,29 +198,32 @@ struct Node* CreateNewNode(void)
 void SetNode(struct Node* const pNode, const enum NodeKind kind, struct Node* const pLhs, struct Node* const pRhs)
 {
 	assert(pNode != NULL);
-	pNode->kind = kind;
-	pNode->pLhs = pLhs;
-	pNode->pRhs = pRhs;
+	(pNode)->kind = kind;
+	(pNode)->pLhs = pLhs;
+	(pNode)->pRhs = pRhs;
 }
 // expr = mul ( "+" mul | "-" mul) *
 struct Node* Expr(struct Token* pToken, const char* const pSrc)
 {
 	struct Node* pNode = Mul(pToken, pSrc);
+	pToken = pToken->next;
 	if (IsExpectedToken('+', pToken))
 	{
 		pToken = pToken->next;
 
 		struct Node* const pTmp = CreateNewNode();
-		SetNode(pTmp, ND_ADD, pNode, Mul(pToken, pSrc));
+		SetNode(&(*pTmp), ND_ADD, pNode, Mul(pToken, pSrc));
 		pNode = pTmp;
+		DebugPrintNode(pNode);
 	}
 	else if (IsExpectedToken('-', pToken))
 	{
 		pToken = pToken->next;
 
 		struct Node* const pTmp = CreateNewNode();
-		SetNode(pTmp, ND_SUB, pNode, Mul(pToken, pSrc));
+		SetNode(&(*pTmp), ND_SUB, pNode, Mul(pToken, pSrc));
 		pNode = pTmp;
+		DebugPrintNode(pNode);
 	}
 	return pNode;
 }
@@ -219,21 +231,24 @@ struct Node* Expr(struct Token* pToken, const char* const pSrc)
 struct Node* Mul(struct Token* pToken, const char* const pSrc)
 {
 	struct Node* pNode = Primary(pToken, pSrc);
+	pToken = pToken->next;
 	if (IsExpectedToken('*', pToken))
 	{
 		pToken = pToken->next;
 
 		struct Node* const pTmp = CreateNewNode();
-		SetNode(pTmp, ND_MUL, pNode, Primary(pToken, pSrc));
+		SetNode(&(*pTmp), ND_MUL, pNode, Primary(pToken, pSrc));
 		pNode = pTmp;
+		DebugPrintNode(pNode);
 	}
 	else if (IsExpectedToken('/', pToken))
 	{
 		pToken = pToken->next;
 
 		struct Node* const pTmp = CreateNewNode();
-		SetNode(pTmp, ND_DIV, pNode, Primary(pToken, pSrc));
+		SetNode(&(*pTmp), ND_DIV, pNode, Primary(pToken, pSrc));
 		pNode = pTmp;
+		DebugPrintNode(pNode);
 	}
 	return pNode;
 }
@@ -245,15 +260,15 @@ struct Node* Primary(struct Token* pToken, const char* const pSrc)
 		pToken = pToken->next;
 
 		struct Node* const pNode = Expr(pToken, pSrc);
-		if (IsExpectedToken(')', pToken)) { ErrorAt(pToken->str, pSrc, "need token ')'."); }
-		pToken = pToken->next;
+		if (!IsExpectedToken(')', pToken)) { ErrorAt(pToken->str, pSrc, "need token ')'."); }
+		DebugPrintNode(pNode);
 		return pNode;
 	}
 
 	if (!IsExpectedNumber(pToken)) { ErrorAt(pToken->str, pSrc, "need token num"); }
 	struct Node* const pNode = CreateNewNode();
 	pNode->value = pToken->value;
-	pToken = pToken->next;
+	DebugPrintNode(pNode);
 	return pNode;
 }
 
@@ -268,6 +283,8 @@ int main(int argc, char *argv[])
 	// トークナイズ
 	struct Token* pToken = Tokenize(argv[1]);
 	struct Token* pHead = pToken;
+	struct Node* pNode = Expr(pToken, argv[1]);
+	// DebugPrintNode(pNode);
 
 	printf(".intel_syntax noprefix\n");
 	printf(".global main\n");
