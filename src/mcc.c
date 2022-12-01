@@ -309,6 +309,46 @@ void ReleaseNodeMemory(struct Node* pRootNode)
 	free(pRootNode);
 }
 
+// スタックマシン
+void Gen(const struct Node* const pNode)
+{
+	assert(pNode != NULL);
+
+	if (pNode->kind == ND_NUM)
+	{
+		printf("  push %d\n", pNode->value);
+		return;
+	}
+
+	Gen(pNode->pLhs);
+	Gen(pNode->pRhs);
+
+	printf("  pop rdi\n");
+	printf("  pop rax\n");
+
+	switch(pNode->kind)
+	{
+		case ND_ADD:
+			printf("  add rax, rdi\n");
+			break;
+		case ND_SUB:
+			printf("  sub rax, rdi\n");
+			break;
+		case ND_MUL:
+			printf("  imul rax, rdi\n");
+			break;
+		case ND_DIV:
+			printf("  cqo\n");
+			printf("  idiv rdi\n");
+			break;
+		default:
+			fprintf(stderr, "This kind is not recognized.");
+			exit(1);
+	}
+
+	printf("  push rax\n");
+}
+
 int main(int argc, char *argv[])
 {
 	if (argc != 2)
@@ -324,42 +364,21 @@ int main(int argc, char *argv[])
 	struct Token* pHead = pToken;
 	// printf("\ntest token\n"); DebugPrintTokens(pHead);
 	struct Node* pNode = Expr(&pToken, userInput);
-	printf("\ntest node\n"); DebugPrintNodes(pNode);
+	// printf("\ntest node\n"); DebugPrintNodes(pNode);
 
 	pToken = pHead;
+
+	// アセンブリ前半
 	printf(".intel_syntax noprefix\n");
 	printf(".global main\n");
-
 	printf("main:\n");
 
-	printf("        mov rax, %d\n", pToken->value);
-	pToken = pToken->next;
-	while (!IsEOF(pToken))
-	{
-		if (IsExpectedToken('+', pToken))
-		{
-			pToken = pToken->next;
-			if (!IsExpectedNumber(pToken)) { ErrorAt(pToken->str, userInput, "Not number."); }
-			printf("        add rax, %d\n", pToken->value);
-		}
-		else if (IsExpectedToken('-',pToken))
-		{
-			pToken = pToken->next;
-			if (!IsExpectedNumber(pToken)) { ErrorAt(pToken->str, userInput, "Not number."); }
-			printf("        sub rax, %d\n", pToken->value);
-		}
-		else
-		{
-			ReleaseTokenMemory(pHead);
-			ReleaseNodeMemory(pNode);
-			fprintf(stderr, "Cannot output assembly language.\n");
-			return 1;
-		}
+	// 抽象構文木を下りながらコード生成
+	Gen(pNode);
 
-		pToken = pToken->next;
-	}
-
-	printf("        ret\n");
+	// スタックトップの式の結果をロード
+	printf("  pop rax\n");
+	printf("  ret\n");
 
 	ReleaseTokenMemory(pHead);
 	ReleaseNodeMemory(pNode);
